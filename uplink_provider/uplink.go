@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"storj.io/uplink"
 	"storj.io/uplink/edge"
@@ -14,27 +15,31 @@ type Server struct {
 	UplinkServiceServer
 }
 
-func generateURL(ctx context.Context, access *uplink.Access, bucket string, key string, baseURL string) error {
+func generateURL(ctx context.Context, access *uplink.Access, bucket string, key string) (string, error) {
 	publicAccess := true
+	authService := "https://auth.storjshare.io:7777"
+	baseURL := "https://link.storjshare.io"
+
+	authService = strings.TrimPrefix(authService, "https://")
+	authService = strings.TrimSuffix(authService, "/")
+	if !strings.Contains(authService, ":") {
+		authService += ":7777"
+	}
 
 	var edgeConfig edge.Config
-
-	// edgeConfig.AuthServiceAddress =
-	// edgeConfig.CertificatePEM =
+	edgeConfig.AuthServiceAddress = authService
 
 	credentials, err := edgeConfig.RegisterAccess(ctx, access, &edge.RegisterAccessOptions{Public: publicAccess})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	url, err := edge.JoinShareURL(baseURL, credentials.AccessKeyID, bucket, key, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	fmt.Print(url)
-
-	return nil
+	return url, nil
 }
 
 func (s *Server) Upload(stream UplinkService_UploadServer) error {
@@ -77,12 +82,12 @@ func (s *Server) Upload(stream UplinkService_UploadServer) error {
 		return fmt.Errorf("could not commit uploaded object: %w", err)
 	}
 
-	err = generateURL(ctx, access, args.BucketName, args.ObjectKey, "base-url")
+	url, err := generateURL(ctx, access, args.BucketName, args.ObjectKey)
 	if err != nil {
 		return fmt.Errorf("could not generate public URL: %w", err)
 	}
 
-	stream.SendAndClose(&UploadReturn{Response: &UploadResponse{Url: "fake-url"}})
+	stream.SendAndClose(&UploadReturn{Response: &UploadResponse{Url: url}})
 
 	return nil
 }
