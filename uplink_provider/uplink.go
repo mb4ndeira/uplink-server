@@ -73,7 +73,10 @@ func (s *Server) Upload(stream UplinkService_UploadServer) error {
 
 	_, err = io.Copy(upload, bytes.NewReader(args.Data))
 	if err != nil {
-		_ = upload.Abort()
+		err = upload.Abort()
+		if err != nil {
+			return fmt.Errorf("could not abort upload: %w", err)
+		}
 		return fmt.Errorf("could not upload data: %w", err)
 	}
 
